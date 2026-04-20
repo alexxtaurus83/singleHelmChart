@@ -1,0 +1,13 @@
+{{- if .Values.podDisruptionBudget }}
+{{- if and (.Values.podDisruptionBudget.enabled) (gt (int .Values.replicaCount) 1) }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name:  {{ .Values.applicationName }}-pdb
+spec:
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      app:  {{ .Values.applicationName }}
+{{- end }}
+{{- end }}

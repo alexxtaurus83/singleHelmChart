@@ -1,0 +1,42 @@
+{{- $job := .Values.job | default dict }}
+{{- if not $job.enabled }}
+apiVersion: "apps/v1"
+kind: "Deployment"
+metadata:
+  labels:
+    app: {{ .Values.applicationName }}
+  name: {{ .Values.applicationName }}
+spec:  
+{{- $autoscaling := .Values.autoscaling | default dict }}
+{{- if not $autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+{{- end }}
+  selector:  
+    matchLabels:
+      app: {{ .Values.applicationName }}  
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations:
+        {{- if .Values.forceRollout }}
+        rollme: {{ randAlphaNum 5 | quote }}
+        {{- end }}
+      labels:
+{{- include "singleChart.podLabels" . | nindent 8 }}
+      name: {{ .Values.applicationName }}
+    spec:
+{{- include "singleChart.serviceAccount" . | nindent 6 }}
+{{- include "singleChart.initContainers" . | nindent 6 }}
+{{- include "singleChart.scheduling" . | nindent 6 }}
+{{- include "singleChart.podSecurityContext" . | nindent 6 }}
+      containers:
+        - name: {{ .Values.applicationName }}
+{{- include "singleChart.container" . | nindent 10 }}
+
+{{- include "singleChart.volumes" . | nindent 6 }}
+{{- end }}
+

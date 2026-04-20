@@ -1,0 +1,37 @@
+{{- with .Values.ingress }}     
+  {{- if .enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    {{- if eq (.tlsMode | default "termination") "passthrough" }}
+    "nginx.ingress.kubernetes.io/ssl-passthrough": "true"
+    {{- else }}
+    "nginx.ingress.kubernetes.io/force-ssl-redirect": "true"
+    "nginx.ingress.kubernetes.io/rewrite-target": /$1
+    "nginx.ingress.kubernetes.io/use-regex": "true"
+    {{- end }}
+  labels:
+    app: {{ $.Values.applicationName }}
+  name: {{ $.Values.applicationName }}
+spec: 
+  ingressClassName: nginx
+  {{- if ne (.tlsMode | default "termination") "passthrough" }}
+  tls:
+    - hosts: 
+        - {{ tpl .host $ }}
+      secretName: tls-secret  
+  {{- end }}
+  rules:
+  - host: {{ tpl .host $ }}
+    http:
+      paths:
+      - path: /metrics/(.*)
+        pathType: ImplementationSpecific
+        backend:     
+          service:
+            name: {{ $.Values.applicationName }}
+            port:
+              number: {{ $.Values.ports }}
+  {{- end }}
+{{- end }}

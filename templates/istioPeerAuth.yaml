@@ -1,0 +1,18 @@
+{{- with .Values.vservice }}
+  {{- with .strictPeerAuthenticationMtls }}
+    {{- if .enabled }}
+apiVersion: "security.istio.io/v1beta1"
+kind: "PeerAuthentication"
+metadata:
+  name: {{ $.Values.applicationName }}
+  labels:
+    app: {{ $.Values.applicationName }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ $.Values.applicationName }}
+  mtls:
+    mode: STRICT
+    {{- end }}
+  {{- end }}
+{{- end }}

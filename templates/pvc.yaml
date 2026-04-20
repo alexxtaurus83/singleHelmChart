@@ -1,0 +1,27 @@
+{{- with .Values.mounts }}
+  {{- with .persistentVolumes }}
+    {{- if .enabled }}
+      {{- range $pv := .list }}
+        {{- $pvPvc := $pv.pvc | default dict }}
+        {{- if and $pvPvc.enabled $pvPvc.create }}
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  labels:
+    app: {{ $.Values.applicationName }}
+  name: {{ $pv.name }}
+spec:
+  accessModes:
+    - {{ $pvPvc.accessModes }}
+  resources:
+    requests:
+      storage: {{ $pv.size }}
+  volumeName: {{ $pvPvc.pvName }}
+  storageClassName: {{ $pvPvc.storageClassName }}
+  volumeMode: Filesystem
+---
+        {{- end }}
+      {{- end }}
+    {{- end }}
+  {{- end }}
+{{- end }}

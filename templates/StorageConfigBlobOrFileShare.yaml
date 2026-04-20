@@ -1,0 +1,36 @@
+{{- with .Values.mounts }}
+  {{- with .persistentVolumes }}
+    {{- if .enabled }}
+      {{- range $pv := .list }}
+        {{- $azure := $pv.azureFileShareOrBlob | default dict }}
+        {{- if $azure.enabled }}
+apiVersion: kro.run/v1alpha1
+{{- if eq $azure.type "StorageConfigFile" }}
+kind: StorageConfigFile
+{{- else if eq $azure.type "StorageConfigBlob" }}
+kind: StorageConfigBlob
+{{- end }}
+metadata:
+  name: {{ $pv.name }}
+spec:
+  name: {{ $pv.name }}
+  storageAccount: {{ $azure.storageAccount }}
+{{- if eq $azure.type "StorageConfigFile" }}
+  shareName: {{ $azure.shareOrContainerName }}
+{{- else if eq $azure.type "StorageConfigBlob" }}
+  containerName: {{ $azure.shareOrContainerName }}
+{{- end }}
+  storageSize: {{ $pv.size }}
+  resourceGroup: {{ $azure.resourceGroup }}
+{{- if $azure.secretName }}
+  secretName: {{ $azure.secretName }}
+{{- else }}
+  managedIdentityClientID: {{ $azure.managedIdentityClientID }}
+  subscriptionid: {{ $azure.subscriptionid }}
+{{- end }}
+---
+        {{- end }}
+      {{- end }}
+    {{- end }}
+  {{- end }}
+{{- end }}

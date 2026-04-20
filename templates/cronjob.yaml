@@ -1,0 +1,35 @@
+{{- $job := .Values.job | default dict }}
+{{- if $job.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  labels:
+    app: {{ .Values.applicationName }}
+  name: {{ .Values.applicationName }}
+spec:
+  schedule: {{ $job.schedule | quote }}
+  concurrencyPolicy: {{ $job.concurrencyPolicy | default "Forbid" }}
+  failedJobsHistoryLimit: {{ $job.failedJobsHistoryLimit | default 3 }}
+  successfulJobsHistoryLimit: {{ $job.successfulJobsHistoryLimit | default 1 }}
+  jobTemplate:
+    spec:
+      backoffLimit: {{ $job.backoffLimit | default 3 }}
+      {{- with $job.activeDeadlineSeconds }}
+      activeDeadlineSeconds: {{ . }}
+      {{- end }}
+      template:
+        metadata:
+          labels:
+{{- include "singleChart.podLabels" . | nindent 12 }}
+          name: {{ .Values.applicationName }}
+        spec:
+{{- include "singleChart.serviceAccount" . | nindent 10 }}
+{{- include "singleChart.initContainers" . | nindent 10 }}
+{{- include "singleChart.scheduling" . | nindent 10 }}
+{{- include "singleChart.podSecurityContext" . | nindent 10 }}
+          containers:
+            - name: {{ .Values.applicationName }}
+{{- include "singleChart.container" . | nindent 14 }}
+{{- include "singleChart.volumes" . | nindent 10 }}
+          restartPolicy: {{ $job.restartPolicy | default "OnFailure" }}
+{{- end }}

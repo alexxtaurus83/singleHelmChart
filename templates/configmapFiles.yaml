@@ -1,0 +1,23 @@
+{{- with .Values.mounts }}
+  {{- with .configMapFiles }}
+    {{- if .enabled }}
+      {{- range $cmp := .list }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $.Values.applicationName }}-{{ $cmp.name }}-configmapfiles
+  labels:
+    app: {{ $.Values.applicationName }}
+data:
+
+{{- range $key, $value := $cmp.fileList }}
+  {{- if or (not $cmp.subPath) (eq $cmp.subPath $key) }}
+  {{ tpl $key $ }} : |-
+    {{- tpl ($.Files.Get (tpl $value $) ) $ | nindent 4 }}
+  {{- end }}
+{{- end }}
+---
+      {{- end }}
+    {{- end }}
+  {{- end }}
+{{- end }}

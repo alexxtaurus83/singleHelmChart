@@ -1,0 +1,27 @@
+{{- $vservice := .Values.vservice | default dict -}}
+{{- if and .Values.serviceEnabled $vservice.enabled -}}
+apiVersion: networking.istio.io/v1beta1 # networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: {{ .Values.applicationName }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  hosts:
+    - {{ tpl $vservice.host . }} # clusterdomain will be bound to cluster
+  gateways:
+    - {{ $vservice.tlsGateway | default "aks-istio-ingress/gateway-wildcard" }}
+  http:
+    - name: {{ .Values.applicationName }}-routes
+      {{- if $vservice.contextPath }}
+      match:
+        - uri:
+            prefix: {{ $vservice.contextPath }}
+      rewrite:
+        uri: "/"
+      {{- end }}
+      route:
+        - destination:
+            host: {{ .Values.applicationName }}
+            port:
+              number: {{ .Values.ports }}
+{{- end }}

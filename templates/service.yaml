@@ -1,0 +1,21 @@
+{{- if .Values.serviceEnabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: {{ .Values.applicationName }}
+  name: {{ .Values.applicationName }}
+spec:
+  ports:
+    - name: {{.Values.ports }}-tcp
+      port: {{.Values.ports }}
+      protocol: TCP
+      targetPort: {{.Values.ports }}
+{{- $nodePort := .Values.nodePort | default dict -}}
+{{- if $nodePort.enabled }}
+      nodePort: {{ $nodePort.port }}
+{{- end }}
+  selector:
+    app: {{ .Values.applicationName }}
+  type: {{ ternary "NodePort" "ClusterIP" $nodePort.enabled }}
+{{- end }}

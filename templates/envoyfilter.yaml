@@ -1,0 +1,12 @@
+{{- with .Values.envoyFilter }}
+  {{- if .enabled }}
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: {{ .name }}
+  {{- with .spec }}
+spec:
+  {{- toYaml . | nindent 2 }}
+  {{- end }}
+  {{- end }}
+{{- end }}

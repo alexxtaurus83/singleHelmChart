@@ -1,0 +1,250 @@
+# SINGLE_HELM VERSION: 0.0.11
+writableConfigPath: /runtime-config
+configPath: /config
+logPath: /data-logs
+secretVolumePath: "/etc/secrets"
+
+applicationName: testapp
+applicationConfig: application.yml
+
+image:
+  repository: container.net/test
+  tag: "${RELEASE_VERSION}"
+
+# Pod Resources
+maxCPUCores: 1000m
+minCPUCores: 100m
+maxMemory: 2048Mi
+minMemory: 256Mi
+
+# Security
+runAsUser: 1000  
+runAsGroup: 1000
+
+# Replica Count and HPA
+replicaCount: 2
+# Set to true to force pod rollout on every helm upgrade (e.g. to pick up new image when tag is not changed)
+forceRollout: false
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 2
+  targetCPUUtilizationPercentage: 90
+  targetMemoryUtilizationPercentage: 90
+
+podDisruptionBudget:
+  # To enable Pod Disruption Budget, set 'enabled' to true & replicaCount to more than 1
+  enabled: true  # Protects against too many concurrent voluntary disruptions when true
+  minAvailable: 1  # Minimum number of pods that must remain available during disruptions
+
+# To disable tolerations, set tolerations to an empty list: tolerations: []
+tolerations:
+  - key: "app"  # Node taint key the pod will tolerate
+    operator: "Equal"  # Match operator for toleration (Equal requires a singular value field)
+    value: "{{ .Values.applicationName }}"  # App label value that this pod tolerates
+    effect: "NoSchedule"  # Pods can still run on nodes with this taint
+
+## ==< Service Configuration  : These Value will get invoked in service.yaml ==> ## 
+serviceEnabled: true
+ports: 9081
+nodePort:
+  enabled: true
+  port: 12345
+
+## ==< Ingress Configuration  : These Value will get invoked in ingress.yaml ==> ## 
+#TODO add path configurtaion
+ingress: 
+  enabled: true
+  host: "{{ .Values.applicationName }}.azure.net"
+  tlsMode: "termination"  # "termination" (L7, nginx terminates TLS) or "passthrough" (L4, stream passthrough)
+
+## ==< Istio VirtualService configuration >== ##
+vservice:
+  enabled: true  # When true, create an Istio VirtualService for this app
+  host: "{{ .Values.applicationName }}.azure.net"
+#  tlsGateway: aks-istio-system/ingress-https-gateway  # Gateway (namespace/name) handling TLS ingress
+#  contextPath: /anvaya/brahma/  # URL path prefix routed to this service
+#  strictPeerAuthenticationMtls:
+#    enabled: true  # Enforce strict peer authentication (mTLS) for this workload
+
+## ==< ConfigMap Configuration  : These Value will get invoked in ConfigMap.yaml ==> ##
+environmentVariablesViaConfigMap:
+  enabled: true
+  list:
+    "PROPERTIES": "{{ .Values.applicationConfig }}"
+    "JAVA_TOOL_OPTIONS": "-Djava.io.tmpdir=/tmp"
+
+# Container Configuration
+container:
+  startCommand:
+    enabled: true
+    command: '["/bin/sh", "-c"]'
+  startCommandArgs:
+    enabled: true
+    args: '[cmdone; cmdtwo; ]' 
+# Probe configuration    
+# Liveness/readiness probes control restart and readiness behavior
+  livenessProbe:  
+    enabled: true  # Restart pod automatically if liveness checks fail repeatedly
+    customHeaders:
+      name: name  # Example custom header name for health checks
+      value: "value"  # Example header value
+    selfHealthCheckUrl: /Health  # probe path
+    scheme: HTTP  # Scheme for liveness probe (HTTP or HTTPS)
+  readinessProbe:
+    enabled: true  # Controls when pod is marked Ready for traffic
+    customHeaders:
+      name: name  # Example custom header name for health checks
+      value: "value"  # Example header value
+    selfHealthCheckUrl: /Health  # probe path
+    scheme: HTTP  # Scheme for readiness probe
+  startupProbe:
+    enabled: true  # Use when application startup time is long to avoid premature restarts
+    customHeaders:
+      name: name  # Example custom header name for health checks
+      value: "value"  # Example header value
+    selfHealthCheckUrl: /Health  # probe path
+    scheme: HTTP  # Correct scheme value for startup probe (fix from original 'HTPP')
+  lifecycle:
+    postStart:
+      enabled: true
+      command: '["/bin/bash","-c"]'
+    preStop:
+      enabled: true
+      command: '["kill postgress"]'
+
+      
+# Init Container Configuration
+initContainers:
+  curl:
+    enabled: true
+    url: "http://demo.url" 
+    authorization: "" 
+    apiEndpoint: api/Utility/healthcheck
+    command: "['sh', '-c', \"while [ $(curl -ksw '%{http_code}' {{ tpl .Values.initContainers.curl.url . }}/{{ tpl .Values.initContainers.curl.apiEndpoint . }} {{ tpl .Values.initContainers.curl.authorization . }} -o /dev/null) -ne 200 ]; do sleep 5; echo 'Waiting for the response code 200...'; done\"]"
+    image: "container.net/test:1.0.0"
+  postgres:
+    enabled: false
+    command: "[ 'sh', '-c', 'until pg_isready --dbname=dbName --port=3333 --username=username --host=host; do sleep 5; done' ]"
+    image: "container.net/actions/pg_isready:10.3-5"
+  telnet: 
+    enabled: false
+    command: "[ 'sh', '-c', 'until telnet hostname 5672; do echo waiting for rabbitmq; sleep 5; done;' ]"
+    image: "container.net/busybox:latest"
+  redis: 
+    enabled: false
+    command: "[]"
+    image: "image"
+  mongo: 
+    enabled: false
+    command: "[]"
+    image: "image"
+  oracle: 
+    enabled: false
+    command: "[]"
+    image: truemark/sqlplus:19.8
+
+# Mount configuration
+mounts:
+  emptyDirs:
+    enabled: true
+    sizeLimit: 500Mi
+    list:
+      data-logs: "{{ .Values.logPath }}"
+      tmp: /tmp
+  persistentVolumes:
+    enabled: true  # When true, mount persistent storage volumes into the pod
+    list:
+      # Example 1: Standard PVC (dedicated AKS clusters)
+      - name: "pvc-blob-t1"  # Volume name (also used as PVC claimName)
+        path: "/test/pvc1"  # Mount path inside the container
+        size: 1Gi  # Storage size (for PVC creation)
+        readOnly: false  # K8s volumeMount readOnly flag
+        subPath: ""  # K8s volumeMount subPath
+        pvc:  # Standard Kubernetes PVC — use on dedicated AKS clusters
+          enabled: false
+          create: false  # If true, chart creates PVC; if false, PVC must pre-exist
+          pvName: pv-blob  # PV name to bind (when create=true)
+          accessModes: ReadWriteMany  # ReadWriteOnce | ReadOnlyMany | ReadWriteMany
+          storageClassName: azureblob-fuse  # StorageClass for dynamic provisioning
+        azureFileShareOrBlob:
+          enabled: false  # Must be false when pvc.enabled is true     
+  secretFiles:
+    enabled: true
+    list:
+      - name: "data"  # Name of the Secret/mount
+        path: "{{ .Values.secretVolumePath }}"  # Target path for mounting secret files
+        subPath: ""  # If set to specific filename, only that file will be mounted
+        binary: false  # When true, use binaryData in Secret for binary files (e.g. .bin, .p12, .jks). Defaults to false if not specified.
+        fileList:
+          test.txt: '{{ "misc/test.txt" }}' # Example mapping: text file from chart to secret key
+      - name: "bindata"  # Separate entry for binary files
+        path: "{{ .Values.secretVolumePath }}/bin"  # Target path for binary files
+        subPath: ""  # If set to specific filename, only that file will be mounted
+        binary: true  # Binary mode: files are stored as binaryData in the Secret (no template processing)
+        fileList:
+          test.bin: '{{ "misc/demo.bin" }}' # Example extra file (e.g. keystore, certificate)
+  configMapFiles:
+    enabled: true
+    list:
+      - name: "config"
+        path: "{{ .Values.configPath }}"
+        subPath: ""  # if 'subPath' empty - all files from fileList will be mounted to the 'path' replacing all 'path' content
+        fileList:
+          "{{ .Values.applicationConfig }}": 'misc/{{ .Values.applicationConfig }}'          
+#      - name: "custom"
+#        path: "/myCustomPath/here"
+#        subPath: '{{ printf "appsettings.%s" "json" }}' # if 'subPath' = 'fileName' - only one file with the same name (equal strings) from fileList will be mounted to the 'path' (keeping remaning content of path)
+#        fileList:
+#          nginx.conf: "files/nginx.conf"  # this file will be inored
+#          '{{ printf "appsettings.%s" "json" }}': '{{ printf "files/appsettings.%s" "json" }}'
+  useExistingSecret:
+    enabled: false  # When true, mount an existing Secret as a volume
+    list:
+      - name: "demo-existing-secret"  # Logical name for the secret volume
+        path: "/etc/demo/secret"  # Container path to mount secret contents
+        subPath: ""  # Empty -> mount all keys in the Secret as files
+        secretName: "demo-existing-secret-name"  # Name of the pre-created Kubernetes Secret
+
+# This feature should be tested carefully on shared AKS clusters before enabling
+envoyFilter:
+   enabled: true  # When true, create an EnvoyFilter resource for Istio
+   name: add-custom-response-header  # Name of the EnvoyFilter resource
+   spec:
+     workloadSelector:
+       labels:
+         app.kubernetes.io/instance: appservices  # Label selector for workloads this filter targets
+     configPatches:
+     - applyTo: HTTP_FILTER  # Apply patch to HTTP filter chain
+       match:
+         context: ANY  # Apply in any proxy context
+         proxy:
+           proxyVersion: ^1\.22.*  # Restrict to specific proxy versions (regex)
+         listener:
+           filterChain:
+             filter:
+               name: envoy.filters.network.http_connection_manager  # Target HTTP connection manager filter
+       patch:
+         operation: INSERT_BEFORE  # Insert new filter before the matched filter
+         value:
+           name: envoy.filters.http.lua  # Lua HTTP filter
+           typed_config:
+             "@type": "type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua"  # Envoy Lua filter type
+             inlineCode: |
+                 function envoy_on_response(response_handle)
+                   response_handle:headers():add("custom-response-header", "custom-response-header")
+                 end
+
+
+## ==< CronJob / Job configuration >== ##
+# Set job.enabled to true to render a CronJob instead of a Deployment.
+# When job.enabled is true, the Deployment template is skipped entirely.
+job:
+  enabled: false  # Set to true to deploy as a CronJob instead of a Deployment
+  schedule: "0 2 * * *"  # Cron schedule expression (e.g. daily at 2 AM UTC)
+  concurrencyPolicy: Forbid  # Forbid | Allow | Replace — controls concurrent job execution
+  backoffLimit: 3  # Number of retries before marking the job as failed
+  restartPolicy: OnFailure  # OnFailure | Never — pod restart policy for failed containers
+  failedJobsHistoryLimit: 3  # Number of failed Job objects to retain for debugging
+  successfulJobsHistoryLimit: 1  # Number of successful Job objects to retain
+  activeDeadlineSeconds: 3600  # Maximum duration (seconds) before the job is terminated
