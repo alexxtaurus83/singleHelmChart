@@ -8,8 +8,8 @@ applicationName: testapp
 applicationConfig: application.yml
 
 image:
-  repository: container.net/test
-  tag: "${RELEASE_VERSION}"
+  repository: nginx
+  tag: alpine
 
 # Pod Resources
 maxCPUCores: 1000m
@@ -38,23 +38,23 @@ podDisruptionBudget:
   minAvailable: 1  # Minimum number of pods that must remain available during disruptions
 
 # To disable tolerations, set tolerations to an empty list: tolerations: []
-tolerations:
-  - key: "app"  # Node taint key the pod will tolerate
-    operator: "Equal"  # Match operator for toleration (Equal requires a singular value field)
-    value: "{{ .Values.applicationName }}"  # App label value that this pod tolerates
-    effect: "NoSchedule"  # Pods can still run on nodes with this taint
+tolerations: []
+#tolerations:
+#  - key: "app"  # Node taint key the pod will tolerate
+#    operator: "Equal"  # Match operator for toleration (Equal requires a singular value field)
+#    value: "{{ .Values.applicationName }}"  # App label value that this pod tolerates
+#    effect: "NoSchedule"  # Pods can still run on nodes with this taint
 
 ## ==< Service Configuration  : These Value will get invoked in service.yaml ==> ## 
 serviceEnabled: true
 ports: 9081
 nodePort:
-  enabled: true
-  port: 12345
+  enabled: false
 
 ## ==< Ingress Configuration  : These Value will get invoked in ingress.yaml ==> ## 
 #TODO add path configurtaion
 ingress: 
-  enabled: true
+  enabled: false
   host: "{{ .Values.applicationName }}.azure.net"
   tlsMode: "termination"  # "termination" (L7, nginx terminates TLS) or "passthrough" (L4, stream passthrough)
 
@@ -71,16 +71,16 @@ vservice:
 environmentVariablesViaConfigMap:
   enabled: true
   list:
-    "PROPERTIES": "{{ .Values.applicationConfig }}"
-    "JAVA_TOOL_OPTIONS": "-Djava.io.tmpdir=/tmp"
+    "APP_NAME": "nginx-test"
+    "NGINX_ENV": "test"
 
 # Container Configuration
 container:
   startCommand:
-    enabled: true
+    enabled: false
     command: '["/bin/sh", "-c"]'
   startCommandArgs:
-    enabled: true
+    enabled: false
     args: '[cmdone; cmdtwo; ]' 
 # Probe configuration    
 # Liveness/readiness probes control restart and readiness behavior
@@ -89,35 +89,35 @@ container:
     customHeaders:
       name: name  # Example custom header name for health checks
       value: "value"  # Example header value
-    selfHealthCheckUrl: /Health  # probe path
+    selfHealthCheckUrl: /health  # probe path
     scheme: HTTP  # Scheme for liveness probe (HTTP or HTTPS)
   readinessProbe:
     enabled: true  # Controls when pod is marked Ready for traffic
     customHeaders:
       name: name  # Example custom header name for health checks
       value: "value"  # Example header value
-    selfHealthCheckUrl: /Health  # probe path
+    selfHealthCheckUrl: /health  # probe path
     scheme: HTTP  # Scheme for readiness probe
   startupProbe:
     enabled: true  # Use when application startup time is long to avoid premature restarts
     customHeaders:
       name: name  # Example custom header name for health checks
       value: "value"  # Example header value
-    selfHealthCheckUrl: /Health  # probe path
+    selfHealthCheckUrl: /health  # probe path
     scheme: HTTP  # Correct scheme value for startup probe (fix from original 'HTPP')
   lifecycle:
     postStart:
-      enabled: true
+      enabled: false
       command: '["/bin/bash","-c"]'
     preStop:
-      enabled: true
+      enabled: false
       command: '["kill postgress"]'
 
       
 # Init Container Configuration
 initContainers:
   curl:
-    enabled: true
+    enabled: false
     url: "http://demo.url" 
     authorization: "" 
     apiEndpoint: api/Utility/healthcheck
@@ -150,10 +150,11 @@ mounts:
     enabled: true
     sizeLimit: 500Mi
     list:
-      data-logs: "{{ .Values.logPath }}"
       tmp: /tmp
+      var-cache-nginx: /var/cache/nginx
+      var-run: /var/run
   persistentVolumes:
-    enabled: true  # When true, mount persistent storage volumes into the pod
+    enabled: false  # When true, mount persistent storage volumes into the pod
     list:
       # Example 1: Standard PVC (dedicated AKS clusters)
       - name: "pvc-blob-t1"  # Volume name (also used as PVC claimName)
@@ -188,10 +189,10 @@ mounts:
     enabled: true
     list:
       - name: "config"
-        path: "{{ .Values.configPath }}"
-        subPath: ""  # if 'subPath' empty - all files from fileList will be mounted to the 'path' replacing all 'path' content
+        path: "/etc/nginx/conf.d"
+        subPath: "default.conf"
         fileList:
-          "{{ .Values.applicationConfig }}": 'misc/{{ .Values.applicationConfig }}'          
+          default.conf: 'misc/default.conf'          
 #      - name: "custom"
 #        path: "/myCustomPath/here"
 #        subPath: '{{ printf "appsettings.%s" "json" }}' # if 'subPath' = 'fileName' - only one file with the same name (equal strings) from fileList will be mounted to the 'path' (keeping remaning content of path)
@@ -208,7 +209,7 @@ mounts:
 
 # This feature should be tested carefully on shared AKS clusters before enabling
 envoyFilter:
-   enabled: true  # When true, create an EnvoyFilter resource for Istio
+   enabled: false  # When true, create an EnvoyFilter resource for Istio
    name: add-custom-response-header  # Name of the EnvoyFilter resource
    spec:
      workloadSelector:
